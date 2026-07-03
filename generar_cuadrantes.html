@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Cuadrantes Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librerías nuevas y más fiables para generar PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <!-- Iconos -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        .tabla-micros th { background-color: #1d4ed8; color: white; } /* Azul oscuro */
+        .tabla-micros tr:nth-child(even) { background-color: #dbeafe; } /* Azul claro suave */
+        .tabla-micros tr:nth-child(odd) { background-color: #ffffff; }
+        .tabla-micros td, .tabla-micros th { border: 1px solid #93c5fd; }
+
+        .tabla-multimedia th.main-header { background-color: #c2410c; color: white; } /* Naranja oscuro */
+        .tabla-multimedia th.sub-header { background-color: #ffedd5; color: black; font-weight: bold;}
+        .tabla-multimedia tr:nth-child(even) { background-color: #ffedd5; } /* Naranja muy suave */
+        .tabla-multimedia tr:nth-child(odd) { background-color: #ffffff; }
+        .tabla-multimedia td, .tabla-multimedia th { border: 1px solid #fed7aa; }
+
+        /* Resaltado para conflictos (misma persona en 2 roles) */
+        .fila-conflicto td { background-color: #fee2e2 !important; color: #991b1b !important; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8 font-sans text-gray-800">
+
+    <div class="max-w-6xl mx-auto space-y-8">
+        
+        <!-- CABECERA -->
+        <div class="bg-white p-6 rounded-xl shadow-md text-center">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Generador de Cuadrantes Pro</h1>
+            <p class="text-gray-500 mb-6">Herramienta para organizar turnos automáticamente: de forma equitativa, sin repetir en el mismo día, ni turnos seguidos.</p>
+            
+            <div class="flex flex-col md:flex-row justify-center items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label for="monthPicker" class="font-semibold">Elige el mes:</label>
+                    <input type="month" id="monthPicker" class="border p-2 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <button onclick="generarMesCompleto()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors flex items-center gap-2">
+                    <i class="ph ph-magic-wand text-xl"></i>
+                    Generar Cuadrantes
+                </button>
+            </div>
+        </div>
+
+        <!-- CONFIGURACIÓN DE NOMBRES -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <!-- Lista Micros -->
+            <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-blue-600">
+                <h2 class="font-bold text-lg mb-4 flex items-center gap-2 text-blue-700">
+                    <i class="ph ph-microphone-stage text-2xl"></i> Equipo Micrófonos
+                </h2>
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="input-micros" placeholder="Nuevo nombre..." class="border p-2 rounded w-full outline-none focus:border-blue-500" onkeypress="handleEnter(event, 'micros')">
+                    <button onclick="agregarNombre('micros')" class="bg-blue-500 text-white px-3 rounded hover:bg-blue-600"><i class="ph ph-plus font-bold"></i></button>
+                </div>
+                <ul id="lista-micros" class="space-y-2 max-h-48 overflow-y-auto pr-2"></ul>
+            </div>
+
+            <!-- Lista Audio -->
+            <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-orange-600">
+                <h2 class="font-bold text-lg mb-4 flex items-center gap-2 text-orange-700">
+                    <i class="ph ph-speaker-hifi text-2xl"></i> Equipo Audio
+                </h2>
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="input-audio" placeholder="Nuevo nombre..." class="border p-2 rounded w-full outline-none focus:border-orange-500" onkeypress="handleEnter(event, 'audio')">
+                    <button onclick="agregarNombre('audio')" class="bg-orange-500 text-white px-3 rounded hover:bg-orange-600"><i class="ph ph-plus font-bold"></i></button>
+                </div>
+                <ul id="lista-audio" class="space-y-2 max-h-48 overflow-y-auto pr-2"></ul>
+            </div>
+
+            <!-- Lista Video -->
+            <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-orange-400">
+                <h2 class="font-bold text-lg mb-4 flex items-center gap-2 text-orange-600">
+                    <i class="ph ph-video-camera text-2xl"></i> Equipo Vídeo
+                </h2>
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="input-video" placeholder="Nuevo nombre..." class="border p-2 rounded w-full outline-none focus:border-orange-400" onkeypress="handleEnter(event, 'video')">
+                    <button onclick="agregarNombre('video')" class="bg-orange-400 text-white px-3 rounded hover:bg-orange-500"><i class="ph ph-plus font-bold"></i></button>
+                </div>
+                <ul id="lista-video" class="space-y-2 max-h-48 overflow-y-auto pr-2"></ul>
+            </div>
+        </div>
+
+        <!-- ZONA DE RESULTADOS -->
+        <div id="resultados" class="hidden space-y-8 mt-8">
+            
+            <!-- UTILIDADES Y AJUSTES MANUALES -->
+            <div class="bg-white p-6 rounded-xl shadow-md grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="font-bold text-lg mb-4 flex items-center gap-2 text-gray-700"><i class="ph ph-swap text-xl text-yellow-600"></i> Sustitución Puntual</h3>
+                    <div class="flex flex-col gap-2">
+                        <select id="swap-dia" class="border p-2 rounded" onchange="actualizarSwap()"></select>
+                        <select id="swap-rol" class="border p-2 rounded" onchange="actualizarSwap()">
+                            <option value="audio">Audio</option>
+                            <option value="video">Vídeo</option>
+                            <option value="micros">Micrófonos</option>
+                        </select>
+                        <select id="swap-origen" class="border p-2 rounded"></select>
+                        <select id="swap-destino" class="border p-2 rounded"></select>
+                        <button onclick="ejecutarSwap()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded font-bold mt-2 flex items-center justify-center gap-2">
+                            <i class="ph ph-check-circle"></i> Aplicar Cambio
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="font-bold text-lg mb-4 flex items-center gap-2 text-gray-700"><i class="ph ph-database text-xl text-gray-600"></i> Guardar / Cargar / Deshacer</h3>
+                    <div class="flex flex-col gap-3">
+                        <button onclick="exportarJSON()" class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded font-bold flex items-center justify-center gap-2">
+                            <i class="ph ph-download-simple"></i> Exportar Copia de Seguridad (JSON)
+                        </button>
+                        <label class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-bold flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="ph ph-upload-simple"></i> Importar Copia de Seguridad
+                            <input type="file" id="import-json" accept=".json" class="hidden" onchange="importarJSON(event)">
+                        </label>
+                        <button onclick="deshacer()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-bold flex items-center justify-center gap-2 mt-2">
+                            <i class="ph ph-arrow-counter-clockwise"></i> Deshacer Último Cambio (Ctrl+Z)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Cuadrante Micros -->
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col">
+                    <div id="contenedor-pdf-micros" class="flex-grow bg-white">
+                        <table class="w-full text-center border-collapse tabla-micros text-sm md:text-base">
+                            <thead>
+                                <tr>
+                                    <th colspan="2" class="py-3 text-xl font-bold uppercase tracking-wider" id="titulo-mes-micros">MICRÓFONOS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpo-tabla-micros"></tbody>
+                        </table>
+                    </div>
+                    <button onclick="descargarPDF('micros')" class="mt-6 w-full bg-blue-700 hover:bg-blue-800 text-white py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition-colors">
+                        <i class="ph ph-download-simple text-xl"></i>
+                        Descargar PDF Micrófonos
+                    </button>
+                </div>
+
+                <!-- Cuadrante Multimedia -->
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col">
+                    <div id="contenedor-pdf-multimedia" class="flex-grow bg-white">
+                        <table class="w-full text-center border-collapse tabla-multimedia text-sm md:text-base">
+                            <thead>
+                                <tr>
+                                    <th colspan="3" class="py-3 text-xl font-bold uppercase tracking-wider main-header" id="titulo-mes-multimedia">MULTIMEDIA</th>
+                                </tr>
+                                <tr>
+                                    <th class="py-2 sub-header w-1/4">FECHA</th>
+                                    <th class="py-2 sub-header w-3/8">AUDIO</th>
+                                    <th class="py-2 sub-header w-3/8">VIDEO</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpo-tabla-multimedia"></tbody>
+                        </table>
+                    </div>
+                    <button onclick="descargarPDF('multimedia')" class="mt-6 w-full bg-orange-700 hover:bg-orange-800 text-white py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition-colors">
+                        <i class="ph ph-download-simple text-xl"></i>
+                        Descargar PDF Multimedia
+                    </button>
+                </div>
+            </div>
+
+            <!-- ZONA DE ESTADÍSTICAS -->
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i class="ph ph-chart-bar text-green-600 text-3xl"></i> 
+                    Resumen de Turnos
+                </h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-center border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 border-b-2 border-gray-300">
+                                <th class="py-3 px-4 text-left font-bold">Nombre</th>
+                                <th class="py-3 px-4 font-semibold text-orange-600">Audio</th>
+                                <th class="py-3 px-4 font-semibold text-orange-500">Vídeo</th>
+                                <th class="py-3 px-4 font-semibold text-blue-600">Micrófonos</th>
+                                <th class="py-3 px-4 font-bold text-gray-800">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpo-estadisticas"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const estado = {
+            nombres: {
+                micros: ["Iván M.", "Danny J.", "Alejandro M.", "Washington P.", "Ismael C.", "Noé H.", "David Fernández", "José Pérez C."],
+                audio: ["David Fernández", "Juan Carlos M.", "Samuel Pérez", "Jorge Pedernera", "Iván Moreno"],
+                video: ["Jorge Pedernera", "Iván Moreno", "Juan Carlos M.", "David Fernández", "Samuel Pérez"]
+            },
+            diasGenerados: [],
+            mesNombres: ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
+        };
+
+        let historial = [];
+
+        // --- SISTEMA DE NOMBRES CANÓNICOS (IVÁN M. = IVÁN MORENO) ---
+        function getCanonicalName(name) {
+            if (!name) return "";
+            const n = name.trim().toLowerCase();
+            if (n === 'iván m.' || n === 'ivan m.' || n === 'iván m' || n === 'ivan m' || n === 'iván moreno' || n === 'ivan moreno') {
+                return 'Iván Moreno'; // Nombre unificado para el sistema
+            }
+            return name.trim();
+        }
+
+        // --- SISTEMA DE HISTORIAL (DESHACER) ---
+        function guardarEstadoPrevio() {
+            // Clon profundo para evitar referencias
+            historial.push(JSON.parse(JSON.stringify(estado)));
+            if (historial.length > 30) historial.shift(); // Máximo 30 pasos atrás
+        }
+
+        function deshacer() {
+            if (historial.length === 0) {
+                alert("No hay cambios recientes para deshacer.");
+                return;
+            }
+            const estadoAnterior = historial.pop();
+            estado.nombres = estadoAnterior.nombres;
+            estado.diasGenerados = estadoAnterior.diasGenerados;
+            
+            renderizarListas();
+            if (estado.diasGenerados.length > 0) {
+                document.getElementById('resultados').classList.remove('hidden');
+                dibujarTablas();
+                calcularEstadisticas();
+                actualizarOpcionesSwap();
+            } else {
+                document.getElementById('resultados').classList.add('hidden');
+            }
+        }
+
+        // Atajo de teclado Ctrl+Z
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'z') {
+                e.preventDefault();
+                deshacer();
+            }
+        });
+
+        window.onload = () => {
+            const fechaActual = new Date();
+            const año = fechaActual.getFullYear();
+            const mes = String(fechaActual.getMonth() + 1).padStart(2, '0');
+            document.getElementById('monthPicker').value = `${año}-${mes}`;
+            renderizarListas();
+        };
+
+        function renderizarListas() {
+            ['micros', 'audio', 'video'].forEach(categoria => {
+                const ul = document.getElementById(`lista-${categoria}`);
+                ul.innerHTML = '';
+                estado.nombres[categoria].forEach((nombre, index) => {
+                    const li = document.createElement('li');
+                    li.className = "flex justify-between items-center bg-gray-50 px-3 py-2 rounded border border-gray-100";
+                    li.innerHTML = `
+                        <span>${nombre}</span>
+                        <button onclick="quitarNombre('${categoria}', ${index})" class="text-red-500 hover:text-red-700 p-1">
+                            <i class="ph ph-trash"></i>
+                        </button>
+                    `;
+                    ul.appendChild(li);
+                });
+            });
+        }
+
+        function agregarNombre(categoria) {
+            const input = document.getElementById(`input-${categoria}`);
+            const nombre = input.value.trim();
+            if (nombre) {
+                guardarEstadoPrevio();
+                estado.nombres[categoria].push(nombre);
+                input.value = '';
+                renderizarListas();
+            }
+        }
+
+        function quitarNombre(categoria, index) {
+            guardarEstadoPrevio();
+            estado.nombres[categoria].splice(index, 1);
+            renderizarListas();
+        }
+
+        function handleEnter(event, categoria) {
+            if (event.key === 'Enter') agregarNombre(categoria);
+        }
+
+        function obtenerNombresMicros(texto) {
+            if (!texto || texto === "") return [];
+            return texto.split(/ - | \/ /).map(n => n.trim()).filter(n => n !== "");
+        }
+
+        // --- SISTEMA DE CONTEO Y REPARTO ---
+        function obtenerConteoActual(indiceIgnorado = -1) {
+            const conteo = {};
+            const registrarTurno = (nombre, rol) => {
+                if (!nombre || nombre === "" || nombre === "---") return;
+                const nom = getCanonicalName(nombre); // Usar nombre canónico para unificar
+                if (!conteo[nom]) conteo[nom] = { audio: 0, video: 0, micros: 0, total: 0 };
+                conteo[nom][rol]++;
+                conteo[nom].total++;
+            };
+
+            ['micros', 'audio', 'video'].forEach(cat => {
+                estado.nombres[cat].forEach(n => {
+                    const nom = getCanonicalName(n);
+                    if (!conteo[nom]) conteo[nom] = { audio: 0, video: 0, micros: 0, total: 0 };
+                });
+            });
+
+            estado.diasGenerados.forEach((dia, idx) => {
+                if (idx === indiceIgnorado) return;
+                registrarTurno(dia.audio, 'audio');
+                registrarTurno(dia.video, 'video');
+                obtenerNombresMicros(dia.micros).forEach(n => registrarTurno(n, 'micros'));
+            });
+
+            return conteo;
+        }
+
+        function elegirEquitativo(lista, excluidos, conteo, rol) {
+            const excluidosCanonical = excluidos.map(getCanonicalName);
+            const disponibles = lista.filter(nombre => !excluidosCanonical.includes(getCanonicalName(nombre)));
+            if (disponibles.length === 0) return "";
+
+            let minRol = Infinity;
+            disponibles.forEach(nombre => {
+                const nom = getCanonicalName(nombre);
+                const veces = conteo[nom] ? conteo[nom][rol] : 0;
+                if (veces < minRol) minRol = veces;
+            });
+
+            let candidatos = disponibles.filter(nombre => {
+                const nom = getCanonicalName(nombre);
+                const veces = conteo[nom] ? conteo[nom][rol] : 0;
+                return veces === minRol;
+            });
+
+            let minTotal = Infinity;
+            candidatos.forEach(nombre => {
+                const nom = getCanonicalName(nombre);
+                const total = conteo[nom] ? conteo[nom].total : 0;
+                if (total < minTotal) minTotal = total;
+            });
+
+            candidatos = candidatos.filter(nombre => {
+                const nom = getCanonicalName(nombre);
+                const total = conteo[nom] ? conteo[nom].total : 0;
+                return total === minTotal;
+            });
+
+            const elegido = candidatos[Math.floor(Math.random() * candidatos.length)];
+            const elegidoLimpio = getCanonicalName(elegido);
+            if (!conteo[elegidoLimpio]) conteo[elegidoLimpio] = { audio: 0, video: 0, micros: 0, total: 0 };
+            conteo[elegidoLimpio][rol]++;
+            conteo[elegidoLimpio].total++;
+
+            return elegido;
+        }
+
+        function asignarRolesUnDia(diaSemana, rolesAnteriores = null, rolesSiguientes = null, conteoActual) {
+            let excluidosAudio = [];
+            if (rolesAnteriores) excluidosAudio.push(rolesAnteriores.audio);
+            if (rolesSiguientes) excluidosAudio.push(rolesSiguientes.audio);
+            
+            let personaAudio = elegirEquitativo(estado.nombres.audio, excluidosAudio, conteoActual, 'audio');
+            if (personaAudio === "") personaAudio = elegirEquitativo(estado.nombres.audio, [], conteoActual, 'audio');
+
+            let excluidosVideo = [personaAudio];
+            if (rolesAnteriores) excluidosVideo.push(rolesAnteriores.video);
+            if (rolesSiguientes) excluidosVideo.push(rolesSiguientes.video);
+            
+            let personaVideo = elegirEquitativo(estado.nombres.video, excluidosVideo, conteoActual, 'video');
+            if (personaVideo === "") personaVideo = elegirEquitativo(estado.nombres.video, [personaAudio], conteoActual, 'video');
+            if (personaVideo === "") personaVideo = elegirEquitativo(estado.nombres.video, [], conteoActual, 'video'); 
+
+            let excluidosMicros = [personaAudio, personaVideo];
+            if (rolesAnteriores) excluidosMicros.push(...obtenerNombresMicros(rolesAnteriores.micros));
+            if (rolesSiguientes) excluidosMicros.push(...obtenerNombresMicros(rolesSiguientes.micros));
+            
+            let personaMicro1 = elegirEquitativo(estado.nombres.micros, excluidosMicros, conteoActual, 'micros');
+            if (personaMicro1 === "") personaMicro1 = elegirEquitativo(estado.nombres.micros, [personaAudio, personaVideo], conteoActual, 'micros');
+
+            const ponerDosMicros = (diaSemana === 6);
+            let personaMicro2 = null;
+            let textoMicros = personaMicro1;
+
+            if (ponerDosMicros && personaMicro1 !== "") {
+                let excluidosMicro2 = [...excluidosMicros, personaMicro1];
+                personaMicro2 = elegirEquitativo(estado.nombres.micros, excluidosMicro2, conteoActual, 'micros');
+                if (personaMicro2 === "") personaMicro2 = elegirEquitativo(estado.nombres.micros, [personaAudio, personaVideo, personaMicro1], conteoActual, 'micros');
+                if (personaMicro2 !== "") {
+                    textoMicros += " - " + personaMicro2;
+                }
+            }
+
+            return { audio: personaAudio, video: personaVideo, micros: textoMicros };
+        }
+
+        function generarMesCompleto() {
+            const selector = document.getElementById('monthPicker').value;
+            if (!selector) { alert("Por favor, elige un mes primero."); return; }
+
+            guardarEstadoPrevio();
+            const [añoStr, mesStr] = selector.split('-');
+            const año = parseInt(añoStr);
+            const mes = parseInt(mesStr) - 1; 
+
+            estado.diasGenerados = [];
+            let rolesAnteriores = null; 
+            const conteoEnMarcha = obtenerConteoActual();
+
+            const fecha = new Date(año, mes, 1);
+            while (fecha.getMonth() === mes) {
+                const diaSemana = fecha.getDay();
+                if (diaSemana === 4 || diaSemana === 6) { 
+                    const nombreDia = diaSemana === 4 ? "JUEVES" : "SÁBADO";
+                    const numeroDia = fecha.getDate();
+                    const roles = asignarRolesUnDia(diaSemana, rolesAnteriores, null, conteoEnMarcha);
+                    estado.diasGenerados.push({
+                        id: `dia-${numeroDia}`,
+                        fechaCorta: `${nombreDia} ${numeroDia}`,
+                        diaSemana: diaSemana,
+                        ...roles
+                    });
+                    rolesAnteriores = roles;
+                }
+                fecha.setDate(fecha.getDate() + 1);
+            }
+
+            const nombreMes = estado.mesNombres[mes];
+            document.getElementById('titulo-mes-micros').innerText = `MICRÓFONOS ${nombreMes}`;
+            document.getElementById('titulo-mes-multimedia').innerText = `MULTIMEDIA ${nombreMes}`;
+            document.getElementById('resultados').classList.remove('hidden');
+            
+            dibujarTablas();
+            calcularEstadisticas();
+            actualizarOpcionesSwap();
+        }
+
+        function regenerarUnDia(index, tipo) {
+            guardarEstadoPrevio();
+            const diaActual = estado.diasGenerados[index];
+            const rolesAnteriores = index > 0 ? estado.diasGenerados[index - 1] : null;
+            const rolesSiguientes = index < estado.diasGenerados.length - 1 ? estado.diasGenerados[index + 1] : null;
+            const conteoIgnorandoActual = obtenerConteoActual(index);
+
+            if (tipo === 'micros') {
+                let excluidos = [diaActual.audio, diaActual.video];
+                if (rolesAnteriores) excluidos.push(...obtenerNombresMicros(rolesAnteriores.micros));
+                if (rolesSiguientes) excluidos.push(...obtenerNombresMicros(rolesSiguientes.micros));
+
+                let m1 = elegirEquitativo(estado.nombres.micros, excluidos, conteoIgnorandoActual, 'micros');
+                if (m1 === "") m1 = elegirEquitativo(estado.nombres.micros, [diaActual.audio, diaActual.video], conteoIgnorandoActual, 'micros');
+
+                let texto = m1;
+                if (diaActual.diaSemana === 6 && m1 !== "") { 
+                    let excl2 = [...excluidos, m1];
+                    let m2 = elegirEquitativo(estado.nombres.micros, excl2, conteoIgnorandoActual, 'micros');
+                    if (m2 === "") m2 = elegirEquitativo(estado.nombres.micros, [diaActual.audio, diaActual.video, m1], conteoIgnorandoActual, 'micros');
+                    if (m2 !== "") texto += " - " + m2;
+                }
+                estado.diasGenerados[index].micros = texto;
+            } else if (tipo === 'multimedia') {
+                let excluidosA = [];
+                if (rolesAnteriores) excluidosA.push(rolesAnteriores.audio);
+                if (rolesSiguientes) excluidosA.push(rolesSiguientes.audio);
+                excluidosA.push(...obtenerNombresMicros(diaActual.micros));
+
+                let a = elegirEquitativo(estado.nombres.audio, excluidosA, conteoIgnorandoActual, 'audio');
+                if (a === "") a = elegirEquitativo(estado.nombres.audio, obtenerNombresMicros(diaActual.micros), conteoIgnorandoActual, 'audio');
+
+                let excluidosV = [a];
+                if (rolesAnteriores) excluidosV.push(rolesAnteriores.video);
+                if (rolesSiguientes) excluidosV.push(rolesSiguientes.video);
+                excluidosV.push(...obtenerNombresMicros(diaActual.micros));
+
+                let v = elegirEquitativo(estado.nombres.video, excluidosV, conteoIgnorandoActual, 'video');
+                if (v === "") v = elegirEquitativo(estado.nombres.video, [a, ...obtenerNombresMicros(diaActual.micros)], conteoIgnorandoActual, 'video');
+
+                estado.diasGenerados[index].audio = a;
+                estado.diasGenerados[index].video = v;
+            }
+            dibujarTablas();
+            calcularEstadisticas();
+            actualizarOpcionesSwap();
+        }
+
+        function vaciarDia(index, tipo) {
+            guardarEstadoPrevio();
+            if (tipo === 'micros') estado.diasGenerados[index].micros = "";
+            else if (tipo === 'multimedia') {
+                estado.diasGenerados[index].audio = "";
+                estado.diasGenerados[index].video = "";
+            }
+            dibujarTablas();
+            calcularEstadisticas();
+        }
+
+        // --- DETECTOR DE CONFLICTOS VISUAL ---
+        function dibujarTablas() {
+            const cuerpoMicros = document.getElementById('cuerpo-tabla-micros');
+            const cuerpoMultimedia = document.getElementById('cuerpo-tabla-multimedia');
+            cuerpoMicros.innerHTML = '';
+            cuerpoMultimedia.innerHTML = '';
+
+            estado.diasGenerados.forEach((dia, index) => {
+                // Comprobar conflictos (misma persona canonical en 2 roles)
+                const audioC = getCanonicalName(dia.audio);
+                const videoC = getCanonicalName(dia.video);
+                const microsC = obtenerNombresMicros(dia.micros).map(getCanonicalName);
+                let conflicto = false;
+                
+                if (audioC && (videoC === audioC || microsC.includes(audioC))) conflicto = true;
+                if (videoC && microsC.includes(videoC)) conflicto = true;
+                
+                const claseConflicto = conflicto ? 'fila-conflicto' : '';
+
+                // FILA MICROS
+                const trMicro = document.createElement('tr');
+                if (conflicto) trMicro.classList.add('fila-conflicto');
+                trMicro.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-left whitespace-nowrap w-1/4">${dia.fechaCorta}</td>
+                    <td class="py-3 px-4 font-medium flex items-center justify-between">
+                        <span class="mx-auto">${dia.micros}</span>
+                        <div class="hide-in-pdf ml-2 flex gap-1">
+                            <button onclick="regenerarUnDia(${index}, 'micros')" title="Cambiar nombres" class="text-gray-400 hover:text-blue-600 bg-white rounded-full p-1 shadow-sm border">
+                                <i class="ph ph-arrows-clockwise text-lg"></i>
+                            </button>
+                            <button onclick="vaciarDia(${index}, 'micros')" title="Dejar vacío" class="text-gray-400 hover:text-red-600 bg-white rounded-full p-1 shadow-sm border">
+                                <i class="ph ph-eraser text-lg"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                cuerpoMicros.appendChild(trMicro);
+
+                // FILA MULTIMEDIA
+                const trMulti = document.createElement('tr');
+                if (conflicto) trMulti.classList.add('fila-conflicto');
+                trMulti.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-left whitespace-nowrap">${dia.fechaCorta}</td>
+                    <td class="py-3 px-4 font-medium">${dia.audio}</td>
+                    <td class="py-3 px-4 font-medium flex items-center justify-between">
+                        <span class="mx-auto">${dia.video}</span>
+                        <div class="hide-in-pdf ml-2 flex gap-1">
+                            <button onclick="regenerarUnDia(${index}, 'multimedia')" title="Cambiar nombres" class="text-gray-400 hover:text-orange-600 bg-white rounded-full p-1 shadow-sm border">
+                                <i class="ph ph-arrows-clockwise text-lg"></i>
+                            </button>
+                            <button onclick="vaciarDia(${index}, 'multimedia')" title="Dejar vacío" class="text-gray-400 hover:text-red-600 bg-white rounded-full p-1 shadow-sm border">
+                                <i class="ph ph-eraser text-lg"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                cuerpoMultimedia.appendChild(trMulti);
+            });
+        }
+
+        function calcularEstadisticas() {
+            const conteo = obtenerConteoActual();
+            const cuerpoEstadisticas = document.getElementById('cuerpo-estadisticas');
+            cuerpoEstadisticas.innerHTML = '';
+
+            const esActivo = (nombre) => {
+                const nom = getCanonicalName(nombre);
+                return estado.nombres.audio.map(getCanonicalName).includes(nom) || 
+                       estado.nombres.video.map(getCanonicalName).includes(nom) || 
+                       estado.nombres.micros.map(getCanonicalName).includes(nom);
+            };
+
+            const listaOrdenada = Object.keys(conteo)
+                .map(nombre => ({ nombre: nombre, ...conteo[nombre] }))
+                .filter(persona => persona.total > 0 || esActivo(persona.nombre))
+                .sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre));
+
+            listaOrdenada.forEach(persona => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b hover:bg-gray-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-left font-medium text-gray-800">${persona.nombre}</td>
+                    <td class="py-3 px-4 text-orange-600 font-medium">${persona.audio > 0 ? persona.audio : '-'}</td>
+                    <td class="py-3 px-4 text-orange-500 font-medium">${persona.video > 0 ? persona.video : '-'}</td>
+                    <td class="py-3 px-4 text-blue-600 font-medium">${persona.micros > 0 ? persona.micros : '-'}</td>
+                    <td class="py-3 px-4 font-bold text-gray-900 bg-gray-50">${persona.total}</td>
+                `;
+                cuerpoEstadisticas.appendChild(tr);
+            });
+        }
+
+        // --- SISTEMA DE SUSTITUCIÓN PUNTUAL ---
+        function actualizarOpcionesSwap() {
+            const diaSelect = document.getElementById('swap-dia');
+            diaSelect.innerHTML = '<option value="-1">-- Selecciona Día --</option>';
+            estado.diasGenerados.forEach((dia, index) => {
+                diaSelect.innerHTML += `<option value="${index}">${dia.fechaCorta}</option>`;
+            });
+            actualizarSwap();
+        }
+
+        function actualizarSwap() {
+            const diaIndex = document.getElementById('swap-dia').value;
+            const rol = document.getElementById('swap-rol').value;
+            const origenSelect = document.getElementById('swap-origen');
+            const destinoSelect = document.getElementById('swap-destino');
+            origenSelect.innerHTML = '';
+            destinoSelect.innerHTML = '';
+
+            if (diaIndex === "-1") return;
+
+            const dia = estado.diasGenerados[diaIndex];
+            let personasActuales = [];
+            if (rol === 'micros') personasActuales = obtenerNombresMicros(dia.micros);
+            else personasActuales = dia[rol] ? [dia[rol]] : [];
+
+            personasActuales.forEach(p => origenSelect.innerHTML += `<option value="${p}">${p}</option>`);
+            estado.nombres[rol].forEach(p => destinoSelect.innerHTML += `<option value="${p}">${p}</option>`);
+        }
+
+        function ejecutarSwap() {
+            const diaIndex = parseInt(document.getElementById('swap-dia').value);
+            const rol = document.getElementById('swap-rol').value;
+            const origen = document.getElementById('swap-origen').value;
+            const destino = document.getElementById('swap-destino').value;
+
+            if (isNaN(diaIndex) || !origen || !destino) {
+                alert("Selecciona el día, la persona a sustituir y la nueva persona.");
+                return;
+            }
+
+            guardarEstadoPrevio();
+            const dia = estado.diasGenerados[diaIndex];
+            if (rol === 'micros') {
+                let microsArray = obtenerNombresMicros(dia.micros);
+                const index = microsArray.indexOf(origen);
+                if (index !== -1) microsArray[index] = destino;
+                dia.micros = microsArray.join(" - ");
+            } else {
+                dia[rol] = destino;
+            }
+
+            dibujarTablas();
+            calcularEstadisticas();
+            actualizarSwap();
+        }
+
+        // --- EXPORTAR / IMPORTAR JSON ---
+        function exportarJSON() {
+            const dataStr = JSON.stringify(estado, null, 2);
+            const blob = new Blob([dataStr], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'cuadrante_backup.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importarJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    guardarEstadoPrevio();
+                    const data = JSON.parse(e.target.result);
+                    estado.nombres = data.nombres || estado.nombres;
+                    estado.diasGenerados = data.diasGenerados || [];
+                    renderizarListas();
+                    if (estado.diasGenerados.length > 0) {
+                        document.getElementById('resultados').classList.remove('hidden');
+                        dibujarTablas();
+                        calcularEstadisticas();
+                        actualizarOpcionesSwap();
+                    }
+                    alert("Configuración cargada con éxito.");
+                } catch (err) {
+                    alert("Error al leer el archivo JSON.");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ""; // Reset input
+        }
+
+        // --- GENERACIÓN PDF ---
+        function descargarPDF(tipo) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const selector = document.getElementById('monthPicker').value;
+            const [añoStr, mesStr] = selector.split('-');
+            const nombreMes = estado.mesNombres[parseInt(mesStr) - 1];
+            const año = parseInt(añoStr);
+
+            let title, subtitle, headers, data, colorCabecera, colorFilaPar;
+            
+            if (tipo === 'multimedia') {
+                title = 'MULTIMEDIA';
+                subtitle = `${nombreMes} ${año}`;
+                headers = [['FECHA', 'AUDIO', 'VÍDEO']];
+                data = estado.diasGenerados.map(dia => [dia.fechaCorta, dia.audio, dia.video]);
+                colorCabecera = [194, 65, 12];    // Naranja oscuro (Orange 700)
+                colorFilaPar = [255, 237, 213];   // Naranja muy claro (Orange 100)
+            } else {
+                title = 'MICRÓFONOS';
+                subtitle = `${nombreMes} ${año}`;
+                headers = [['FECHA', 'MICRÓFONOS']];
+                data = estado.diasGenerados.map(dia => [dia.fechaCorta, dia.micros]);
+                colorCabecera = [29, 78, 216];    // Azul oscuro (Blue 700)
+                colorFilaPar = [219, 234, 254];   // Azul muy claro (Blue 100)
+            }
+
+            doc.setFontSize(22);
+            doc.setTextColor(colorCabecera[0], colorCabecera[1], colorCabecera[2]);
+            doc.text(title, 105, 20, { align: 'center' });
+            
+            doc.setFontSize(14);
+            doc.setTextColor(100, 100, 100);
+            doc.text(subtitle, 105, 28, { align: 'center' });
+            
+            doc.autoTable({
+                startY: 35,
+                head: headers,
+                body: data,
+                theme: 'grid',
+                headStyles: { fillColor: colorCabecera, textColor: 255, fontStyle: 'bold', halign: 'center' },
+                bodyStyles: { halign: 'center' },
+                styles: { fontSize: 11, cellPadding: 4 },
+                alternateRowStyles: { fillColor: colorFilaPar }
+            });
+            
+            doc.save(`Cuadrante_${title}_${nombreMes}_${año}.pdf`);
+        }
+    </script>
+</body>
+</html>
